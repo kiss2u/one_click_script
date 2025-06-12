@@ -2360,9 +2360,10 @@ function installWARPClient(){
         ${sudoCmd} apt-key del 835b8acb
         ${sudoCmd} apt-key del 8e5f9a5d
 
-        ${sudoCmd} apt install -y gnupg
+        ${sudoCmd} apt install -y gnupg2
         ${sudoCmd} apt install -y apt-transport-https
 
+        # install cloudflared Cloudflare Tunnel
         # Add cloudflare gpg key
         sudo mkdir -p --mode=0755 /usr/share/keyrings
         curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
@@ -2370,11 +2371,19 @@ function installWARPClient(){
         # Add this repo to your apt repositories
         echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $osReleaseVersionCodeName main" | ${sudoCmd} tee /etc/apt/sources.list.d/cloudflared.list
 
-        # install cloudflared
+        ${sudoCmd} apt-get update
+        # ${sudoCmd} apt-get install cloudflared
+
+        # install cloudflare-warp
+        # Add cloudflare gpg key
+        curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+
+        # Add this repo to your apt repositories
+        echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
 
         ${sudoCmd} apt-get update
-        ${sudoCmd} apt install -y cloudflare-warp
-        ${sudoCmd} apt-get install cloudflared
+        ${sudoCmd} apt-get install -y cloudflare-warp
+
 
     elif [[ "${osRelease}" == "centos" ]]; then
         ${sudoCmd} rpm -e gpg-pubkey-835b8acb-*
@@ -2390,15 +2399,24 @@ function installWARPClient(){
             ${sudoCmd} yum-config-manager --add-repo https://pkg.cloudflare.com/cloudflared-ascii.repo
 
             # install cloudflared
-            ${sudoCmd} yum install cloudflared
+            # ${sudoCmd} yum install cloudflared
+
         else
             # This requires dnf config-manager
             # Add cloudflared.repo to config-manager
             ${sudoCmd} dnf config-manager --add-repo https://pkg.cloudflare.com/cloudflared-ascii.repo
 
             # install cloudflared
-            ${sudoCmd} dnf install cloudflared
+            # ${sudoCmd} dnf install cloudflared
+
         fi
+
+        # Install cloudflare-warp
+        # Add cloudflare-warp.repo to /etc/yum.repos.d/
+        curl -fsSl https://pkg.cloudflareclient.com/cloudflare-warp-ascii.repo | sudo tee /etc/yum.repos.d/cloudflare-warp.repo
+
+        # Update repo
+        ${sudoCmd} yum update -y
 
         ${sudoCmd} yum install -y cloudflare-warp
     fi
@@ -2425,20 +2443,23 @@ function installWARPClient(){
     echo "${configWarpPort}" > "${configWARPPortFilePath}"
 
     ${sudoCmd} systemctl enable warp-svc
+    ${sudoCmd} systemctl start warp-svc
 
-    yes | warp-cli register
     echo
-    echo "warp-cli set-mode proxy"
-    warp-cli set-mode proxy
+    echo "warp-cli --accept-tos registration new"
+    warp-cli --accept-tos registration new
     echo
-    echo "warp-cli --accept-tos set-proxy-port ${configWarpPort}"
-    warp-cli --accept-tos set-proxy-port ${configWarpPort}
+    echo "warp-cli --accept-tos mode proxy"
+    warp-cli --accept-tos mode proxy
+    echo
+    echo "warp-cli --accept-tos proxy port ${configWarpPort}"
+    warp-cli --accept-tos proxy port ${configWarpPort}
     echo
     echo "warp-cli --accept-tos connect"
     warp-cli --accept-tos connect
     echo
-    echo "warp-cli --accept-tos enable-always-on"
-    warp-cli --accept-tos enable-always-on
+    echo "warp-cli --accept-tos status"
+    warp-cli --accept-tos status
 
     echo
     checkWarpClientStatus
